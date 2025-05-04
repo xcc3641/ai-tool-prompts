@@ -26,7 +26,10 @@ import {
   TerminalSquare,
   Wind,
   Cloud,
-  Laptop
+  Laptop,
+  ToggleLeft,
+  ToggleRight,
+  Check
 } from 'lucide-react';
 
 type ToolCategory = {
@@ -134,31 +137,6 @@ function detectLanguage(content: string): string {
   return 'markdown';
 }
 
-// 自定义柔和的高亮主题
-const customHighlightTheme = {
-  ...oneLight,
-  'comment': { color: '#789688', fontStyle: 'italic' },
-  'string': { color: '#698759' },
-  'property': { color: '#7a54c9' },
-  'keyword': { color: '#3b6ea8', fontWeight: 'normal' },
-  'function': { color: '#5a6273' },
-  'boolean': { color: '#3b6ea8' },
-  'number': { color: '#3b6ea8' },
-  'operator': { color: '#5c6773' },
-  'punctuation': { color: '#5c6773' },
-  'tag': { color: '#3d9a5a' },
-  'selector': { color: '#3d9a5a' },
-  'attr-name': { color: '#7a54c9' },
-  'attr-value': { color: '#395f8a' },
-  'char': { color: '#698759' },
-  'builtin': { color: '#3b6ea8' },
-  'inserted': { color: '#3d9a5a' },
-  'deleted': { color: '#b85a68' },
-  'changed': { color: '#b77746' },
-  'class-name': { color: '#7a54c9' },
-  'constant': { color: '#276eac' },
-};
-
 // 高亮文本中的关键词
 function highlightKeywords(content: string): JSX.Element {
   // 使用SyntaxHighlighter组件进行整体高亮
@@ -167,32 +145,21 @@ function highlightKeywords(content: string): JSX.Element {
   return (
     <SyntaxHighlighter
       language={language}
-      style={customHighlightTheme}
+      style={oneLight}
       customStyle={{
         fontSize: '0.9rem',
         borderRadius: '0.5rem',
-        padding: '1.25rem',
-        backgroundColor: '#fcfcfc',
-        color: '#444',
-        border: '1px solid #eaecf0',
+        padding: '1rem',
+        backgroundColor: '#fafafa',
+        color: '#333',
+        border: '1px solid #e5e7eb',
         width: '100%',
         overflowX: 'hidden',
         wordBreak: 'break-word',
-        lineHeight: '1.6',
-        boxShadow: 'inset 0 0 0.5px 0.5px rgba(0, 0, 0, 0.03)',
       }}
       wrapLines={true}
       wrapLongLines={true}
-      lineProps={{ style: { 
-        wordBreak: 'break-all', 
-        whiteSpace: 'pre-wrap',
-        paddingRight: '1rem',
-      } }}
-      codeTagProps={{
-        style: {
-          fontFamily: 'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        }
-      }}
+      lineProps={{ style: { wordBreak: 'break-all', whiteSpace: 'pre-wrap' } }}
     >
       {content}
     </SyntaxHighlighter>
@@ -221,6 +188,8 @@ export default function Home() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [displayMode, setDisplayMode] = useState<'raw' | 'style'>('style');
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // 处理URL参数
   useEffect(() => {
@@ -316,7 +285,10 @@ export default function Home() {
   const copyToClipboard = () => {
     navigator.clipboard.writeText(fileContent)
       .then(() => {
-        alert('内容已复制到剪贴板');
+        setCopySuccess(true);
+        setTimeout(() => {
+          setCopySuccess(false);
+        }, 2000);
       })
       .catch(err => {
         console.error('复制失败:', err);
@@ -347,6 +319,344 @@ export default function Home() {
     const icon = getFileTypeIcon(type);
     
     return { bgColor, textColor, icon, type };
+  };
+
+  // 解析并显示分块内容
+  const renderStyledContent = (content: string): JSX.Element => {
+    // 创建一个函数用于解析匹配标签的内容
+    const parseBlocks = (text: string): { type: string; content: string; blockType?: string; subBlocks?: any[] }[] => {
+      const result = [];
+      let remainingText = text;
+      
+      // 用于查找标签的正则表达式
+      const tagNameRegex = /[a-zA-Z][a-zA-Z0-9_-]*/;
+      
+      // 逐步查找所有可能的标签
+      while (remainingText.length > 0) {
+        // 查找下一个可能的结束标签
+        const endTagMatch = remainingText.match(new RegExp(`<\/(${tagNameRegex.source})>`));
+        
+        if (!endTagMatch || endTagMatch.index === undefined) {
+          // 如果没有找到结束标签，则将剩余文本作为普通文本添加
+          if (remainingText.trim().length > 0) {
+            result.push({
+              type: 'text',
+              content: remainingText
+            });
+          }
+          break;
+        }
+        
+        const endTagName = endTagMatch[1];
+        const endTagIndex = endTagMatch.index;
+        
+        // 查找对应的开始标签
+        const startTagRegex = new RegExp(`<(${endTagName})>`, 'g');
+        let startTagMatch;
+        let lastStartTagIndex = -1;
+        
+        // 找到匹配的最后一个开始标签
+        let tempText = remainingText.substring(0, endTagIndex);
+        while ((startTagMatch = startTagRegex.exec(tempText)) !== null) {
+          lastStartTagIndex = startTagMatch.index;
+        }
+        
+        if (lastStartTagIndex === -1) {
+          // 如果没有找到匹配的开始标签，将结束标签之前的内容作为普通文本添加
+          const textBeforeEndTag = remainingText.substring(0, endTagIndex + endTagMatch[0].length);
+          if (textBeforeEndTag.trim().length > 0) {
+            result.push({
+              type: 'text',
+              content: textBeforeEndTag
+            });
+          }
+          remainingText = remainingText.substring(endTagIndex + endTagMatch[0].length);
+          continue;
+        }
+        
+        // 找到了匹配的标签对
+        // 添加开始标签之前的文本
+        if (lastStartTagIndex > 0) {
+          const textBeforeStartTag = remainingText.substring(0, lastStartTagIndex);
+          if (textBeforeStartTag.trim().length > 0) {
+            result.push({
+              type: 'text',
+              content: textBeforeStartTag
+            });
+          }
+        }
+        
+        // 提取标签内容
+        const startTagLength = endTagName.length + 2; // <tagname>
+        const tagContent = remainingText.substring(lastStartTagIndex + startTagLength, endTagIndex);
+        const fullTagContent = remainingText.substring(lastStartTagIndex, endTagIndex + endTagMatch[0].length);
+        
+        // 特殊处理 functions 标签
+        if (endTagName.toLowerCase() === 'functions') {
+          // 递归解析 functions 内部的 function 标签
+          const functionBlocks = [];
+          
+          // 寻找 function 标签
+          const functionRegex = /<function>([\s\S]*?)<\/function>/g;
+          let functionMatch;
+          let functionLastIndex = 0;
+          
+          while ((functionMatch = functionRegex.exec(tagContent)) !== null) {
+            // 添加匹配前的普通文本
+            if (functionMatch.index > functionLastIndex) {
+              const textBefore = tagContent.substring(functionLastIndex, functionMatch.index);
+              if (textBefore.trim().length > 0) {
+                functionBlocks.push({
+                  type: 'text',
+                  content: textBefore
+                });
+              }
+            }
+            
+            // 添加 function 块
+            functionBlocks.push({
+              type: 'function',
+              content: functionMatch[1]
+            });
+            
+            functionLastIndex = functionMatch.index + functionMatch[0].length;
+          }
+          
+          // 添加最后一部分普通文本
+          if (functionLastIndex < tagContent.length) {
+            const textAfter = tagContent.substring(functionLastIndex);
+            if (textAfter.trim().length > 0) {
+              functionBlocks.push({
+                type: 'text',
+                content: textAfter
+              });
+            }
+          }
+          
+          if (functionBlocks.length > 0) {
+            result.push({
+              type: 'functions',
+              content: fullTagContent,
+              blockType: endTagName,
+              subBlocks: functionBlocks
+            });
+          } else {
+            result.push({
+              type: 'block',
+              blockType: endTagName,
+              content: fullTagContent
+            });
+          }
+        } else {
+          // 其他普通标签
+          result.push({
+            type: 'block',
+            blockType: endTagName,
+            content: fullTagContent
+          });
+        }
+        
+        // 更新剩余文本
+        remainingText = remainingText.substring(endTagIndex + endTagMatch[0].length);
+      }
+      
+      return result;
+    };
+    
+    // 解析内容
+    const matches = parseBlocks(content);
+    
+    // 如果没有匹配项，则整个内容作为普通文本
+    if (matches.length === 0) {
+      matches.push({
+        type: 'text',
+        content: content
+      });
+    }
+    
+    // 渲染解析后的内容
+    return (
+      <div className="space-y-6">
+        {matches.map((item, index) => {
+          if (item.type === 'text') {
+            // 只有在有内容且不仅仅是空白时才渲染普通文本
+            if (!item.content || item.content.trim().length === 0) {
+              return null;
+            }
+            
+            // 渲染普通文本
+            return (
+              <SyntaxHighlighter
+                key={index}
+                language={detectLanguage(item.content)}
+                style={oneLight}
+                customStyle={{
+                  fontSize: '0.9rem',
+                  borderRadius: '0.25rem',
+                  padding: '1rem',
+                  backgroundColor: '#fafafa',
+                  color: '#333',
+                  border: 'none',
+                  width: '100%',
+                  overflowX: 'hidden',
+                  wordBreak: 'break-word',
+                }}
+                wrapLines={true}
+                wrapLongLines={true}
+                lineProps={{ style: { wordBreak: 'break-all', whiteSpace: 'pre-wrap' } }}
+              >
+                {item.content}
+              </SyntaxHighlighter>
+            );
+          } else if (item.type === 'functions') {
+            // 为 functions 块设置样式
+            return (
+              <div key={index} className="rounded-lg border border-blue-200 overflow-hidden shadow-sm bg-white p-4">
+                <div className="mb-2 p-1 bg-blue-50 text-blue-700 text-sm font-mono inline-block rounded">
+                  &lt;{item.blockType}&gt;
+                </div>
+                
+                <div className="space-y-4">
+                  {item.subBlocks && item.subBlocks.map((subItem, subIndex) => {
+                    if (subItem.type === 'text') {
+                      // 渲染functions块中的普通文本
+                      if (!subItem.content || subItem.content.trim().length === 0) {
+                        return null;
+                      }
+                      
+                      return (
+                        <SyntaxHighlighter
+                          key={`${index}-${subIndex}`}
+                          language={detectLanguage(subItem.content)}
+                          style={oneLight}
+                          customStyle={{
+                            fontSize: '0.9rem',
+                            borderRadius: '0.25rem',
+                            padding: '0.75rem',
+                            backgroundColor: '#fafafa',
+                            color: '#333',
+                            border: 'none',
+                            width: '100%',
+                            overflowX: 'hidden',
+                            wordBreak: 'break-word',
+                          }}
+                          wrapLines={true}
+                          wrapLongLines={true}
+                          lineProps={{ style: { wordBreak: 'break-all', whiteSpace: 'pre-wrap' } }}
+                        >
+                          {subItem.content}
+                        </SyntaxHighlighter>
+                      );
+                    } else if (subItem.type === 'function') {
+                      // 渲染function块
+                      return (
+                        <div key={`${index}-${subIndex}`} className="rounded-lg border border-green-200 overflow-hidden shadow-sm bg-white">
+                          <div className="p-1 bg-green-50 text-green-700 text-sm font-mono">
+                            &lt;function&gt;
+                          </div>
+                          <div className="p-3">
+                            <SyntaxHighlighter
+                              language={detectLanguage(subItem.content)}
+                              style={oneLight}
+                              customStyle={{
+                                fontSize: '0.9rem',
+                                borderRadius: '0.25rem',
+                                padding: '0.75rem',
+                                backgroundColor: '#fafafa',
+                                color: '#333',
+                                border: 'none',
+                                width: '100%',
+                                overflowX: 'hidden',
+                                wordBreak: 'break-word',
+                                margin: 0,
+                              }}
+                              wrapLines={true}
+                              wrapLongLines={true}
+                              lineProps={{ style: { wordBreak: 'break-all', whiteSpace: 'pre-wrap' } }}
+                            >
+                              {subItem.content}
+                            </SyntaxHighlighter>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+                
+                <div className="mt-2 p-1 bg-blue-50 text-blue-700 text-sm font-mono inline-block rounded">
+                  &lt;/{item.blockType}&gt;
+                </div>
+              </div>
+            );
+          } else {
+            // 为不同类型的块应用不同的样式
+            let borderColor = 'border-gray-200';
+            
+            // 根据块类型设置不同的样式
+            if (item.blockType) {
+              switch(item.blockType.toLowerCase()) {
+                case 'function':
+                case 'functions':
+                case 'tool':
+                case 'tools':
+                  borderColor = 'border-green-200';
+                  break;
+                case 'system':
+                case 'instructions':
+                  borderColor = 'border-blue-200';
+                  break;
+                case 'example':
+                case 'examples':
+                  borderColor = 'border-purple-200';
+                  break;
+                case 'user':
+                case 'human':
+                  borderColor = 'border-yellow-200';
+                  break;
+                case 'assistant':
+                case 'ai':
+                case 'bot':
+                  borderColor = 'border-indigo-200';
+                  break;
+              }
+            }
+            
+            // 渲染块内容，将标签和内容一起显示在内容区
+            return (
+              <div key={index} className={`rounded-lg border ${borderColor} overflow-hidden shadow-sm bg-white p-0`}>
+                <SyntaxHighlighter
+                  language={detectLanguage(item.content)}
+                  style={oneLight}
+                  customStyle={{
+                    fontSize: '0.9rem',
+                    borderRadius: '0.25rem',
+                    padding: '1rem',
+                    backgroundColor: '#fafafa',
+                    color: '#333',
+                    border: 'none',
+                    width: '100%',
+                    overflowX: 'hidden',
+                    wordBreak: 'break-word',
+                    margin: 0,
+                  }}
+                  wrapLines={true}
+                  wrapLongLines={true}
+                  lineProps={{ style: { wordBreak: 'break-all', whiteSpace: 'pre-wrap' } }}
+                >
+                  {item.content}
+                </SyntaxHighlighter>
+              </div>
+            );
+          }
+        })}
+      </div>
+    );
+  };
+
+  // 切换显示模式
+  const toggleDisplayMode = () => {
+    setDisplayMode(displayMode === 'raw' ? 'style' : 'raw');
   };
 
   return (
@@ -460,13 +770,43 @@ export default function Home() {
                       </>
                     )}
                   </div>
-                  <button 
-                    onClick={copyToClipboard}
-                    className="button text-sm py-1.5 px-3 flex items-center flex-shrink-0"
-                  >
-                    <Copy size={16} className="mr-1.5" />
-                    复制内容
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={toggleDisplayMode}
+                      className={`text-sm py-1.5 px-3 flex items-center flex-shrink-0 rounded-md border transition-all duration-150 ${
+                        displayMode === 'style' 
+                          ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' 
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                      }`}
+                      title={displayMode === 'raw' 
+                        ? "切换到样式模式：将内容按<标签>格式分块显示" 
+                        : "切换到原始模式：显示完整内容"}
+                    >
+                      {displayMode === 'raw' ? (
+                        <ToggleLeft size={16} className="mr-1.5" />
+                      ) : (
+                        <ToggleRight size={16} className="mr-1.5" />
+                      )}
+                      {displayMode === 'raw' ? 'Raw' : 'Style'}
+                    </button>
+                    <button 
+                      onClick={copyToClipboard}
+                      className="text-sm py-1.5 px-3 flex items-center flex-shrink-0 border border-gray-200 rounded-md bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all duration-150"
+                      title="复制原始文本内容"
+                    >
+                      {copySuccess ? (
+                        <>
+                          <Check size={16} className="mr-1.5 text-green-500" />
+                          <span className="text-green-500">已复制</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={16} className="mr-1.5" />
+                          复制内容
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 
                 {/* 文件内容 */}
@@ -477,7 +817,11 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="h-[70vh] max-h-[70vh] overflow-y-auto overflow-x-hidden w-full">
-                      {highlightKeywords(fileContent)}
+                      {displayMode === 'raw' ? (
+                        highlightKeywords(fileContent)
+                      ) : (
+                        renderStyledContent(fileContent)
+                      )}
                     </div>
                   )}
                 </div>
