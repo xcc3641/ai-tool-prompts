@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+// 配置为动态路由以避免静态生成问题
+export const dynamic = 'force-dynamic';
+
 // 文件夹映射 - 保留开源提示词的映射以便能够处理该请求
 const folderMap: Record<string, string> = {
   'v0': 'v0 Prompts and Tools',

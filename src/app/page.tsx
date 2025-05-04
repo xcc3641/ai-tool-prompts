@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import fs from 'fs';
 import path from 'path';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -180,8 +180,20 @@ const getFileTypeIcon = (fileType: 'prompt' | 'tool' | 'model') => {
   }
 };
 
-export default function Home() {
+// 添加Suspense包裹的组件用于处理URL参数
+function SearchParamsHandler({ onParamsChange }: { onParamsChange: (tab: string | null, file: string | null) => void }) {
   const searchParams = useSearchParams();
+  
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const file = searchParams.get('file');
+    onParamsChange(tab, file);
+  }, [searchParams, onParamsChange]);
+  
+  return null;
+}
+
+export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('v0');
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -191,18 +203,16 @@ export default function Home() {
   const [displayMode, setDisplayMode] = useState<'raw' | 'style'>('style');
   const [copySuccess, setCopySuccess] = useState(false);
 
-  // 处理URL参数
-  useEffect(() => {
-    const tab = searchParams.get('tab');
+  // 处理URL参数的回调函数
+  const handleParamsChange = (tab: string | null, file: string | null) => {
     if (tab && toolCategories.some(t => t.slug === tab)) {
       setActiveTab(tab);
     }
     
-    const file = searchParams.get('file');
     if (file) {
       setSelectedFile(file);
     }
-  }, [searchParams]);
+  };
 
   // 当标签改变时加载文件列表
   useEffect(() => {
@@ -661,6 +671,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
+      {/* 添加Suspense包裹的SearchParamsHandler组件 */}
+      <Suspense fallback={null}>
+        <SearchParamsHandler onParamsChange={handleParamsChange} />
+      </Suspense>
+      
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-700">
