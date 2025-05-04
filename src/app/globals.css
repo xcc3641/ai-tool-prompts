@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 23, 23, 23;
+  --background-start-rgb: 245, 247, 250;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    );
+}
+
+@layer components {
+  .card {
+    @apply bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-md overflow-hidden hover:border-blue-500/50 transition-all duration-300;
+  }
+  
+  .button {
+    @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50;
+  }
+  
+  .nav-link {
+    @apply text-gray-700 hover:text-blue-600 transition-colors duration-200;
+  }
+}
